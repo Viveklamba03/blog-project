@@ -1,289 +1,540 @@
-// app/page.js — SportsBud Homepage
-import { getBlogs } from "@/lib/api";
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import QuillEditor from "@/Components/QuillEditor";
+import {
+  createBlog,
+  createCategory,
+  deleteBlog,
+  deleteCategory,
+  getAdminBlogById,
+  getAdminBlogs,
+  getAdminCategories,
+  getAdminSession,
+  loginAdmin,
+  logoutAdmin,
+  updateBlog,
+  updateCategory,
+} from "@/lib/api";
 
-export const metadata = {
-  title: "SportsBud — Latest Sports News & Analysis",
-  description: "Your daily dose of sports news, match analysis & player insights.",
+const emptyBlog = {
+  title: "",
+  excerpt: "",
+  content: "",
+  categoryId: "",
+  subcategoryId: "",
+  tags: "",
+  author: "",
+  coverImage: "",
+  coverImageAlt: "",
+  seoTitle: "",
+  seoDescription: "",
+  noIndex: false,
+  published: true,
 };
 
-const categoryColors = {
-  "Match Analysis": { bg: "#dbeafe", text: "#1d4ed8" },
-  "News":           { bg: "#dcfce7", text: "#15803d" },
-  "Player Spotlight": { bg: "#fef9c3", text: "#a16207" },
-  "Series Preview": { bg: "#ede9fe", text: "#7c3aed" },
-  "Opinion":        { bg: "#fee2e2", text: "#b91c1c" },
-};
+const emptyCategory = { name: "", parentId: "", description: "", seoTitle: "", seoDescription: "" };
 
-function timeAgo(dateStr) {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
+const fieldClass =
+  "mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 outline-none transition focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100";
+
+function formatDate(date) {
+  if (!date) return "—";
+  return new Date(date).toLocaleDateString();
 }
 
-export default async function HomePage({ searchParams }) {
-  const page = parseInt(searchParams?.page || "1");
-  let blogs = [];
-  let totalPages = 1;
-  let total = 0;
+function slugPreview(title) {
+  return (
+    title
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "article"
+  );
+}
 
-  try {
-    const result = await getBlogs({ page, limit: 10 });
-    blogs = result.data || [];
-    totalPages = result.totalPages || 1;
-    total = result.total || 0;
-  } catch (err) {
-    console.error("Failed to fetch blogs:", err.message);
+function getParentId(category) {
+  return typeof category?.parent === "object" ? category.parent?._id : category?.parent;
+}
+
+export default function AdminPage() {
+  const [authenticated, setAuthenticated] = useState(null);
+  const [password, setPassword] = useState("");
+  const [signingIn, setSigningIn] = useState(false);
+  const [blogs, setBlogs] = useState([]);
+  const [blogTotal, setBlogTotal] = useState(0);
+  const [blogPage, setBlogPage] = useState(1);
+  const [blogTotalPages, setBlogTotalPages] = useState(1);
+  const [categories, setCategories] = useState([]);
+  const [form, setForm] = useState(emptyBlog);
+  const [editorResetKey, setEditorResetKey] = useState(0);
+  const [categoryForm, setCategoryForm] = useState(emptyCategory);
+  const [editingId, setEditingId] = useState(null);
+  const [editingCategoryId, setEditingCategoryId] = useState(null);
+  const [loadingBlogs, setLoadingBlogs] = useState(false);
+  const [loadingEdit, setLoadingEdit] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [savingCategory, setSavingCategory] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const topLevelCategories = useMemo(
+    () => categories.filter((category) => !getParentId(category)),
+    [categories]
+  );
+  const subcategories = useMemo(
+    () => categories.filter((category) => getParentId(category) === form.categoryId),
+    [categories, form.categoryId]
+  );
+
+  const loadDashboard = useCallback(async (page = blogPage) => {
+    setLoadingBlogs(true);
+    try {
+      const [blogResult, categoryResult] = await Promise.all([
+        getAdminBlogs({ page }),
+        getAdminCategories(),
+      ]);
+      setBlogs(blogResult.data || []);
+      setBlogTotal(blogResult.total || 0);
+      setBlogTotalPages(blogResult.totalPages || 1);
+      setCategories(categoryResult.data || []);
+      setError("");
+    } catch (loadError) {
+      setError(loadError.message || "Failed to load the dashboard.");
+    } finally {
+      setLoadingBlogs(false);
+    }
+  }, [blogPage]);
+
+  useEffect(() => {
+    getAdminSession()
+      .then((session) => setAuthenticated(session.authenticated))
+      .catch((sessionError) => {
+        setError(sessionError.message || "Unable to verify the admin session.");
+        setAuthenticated(false);
+      });
+  }, []);
+
+  useEffect(() => {
+    if (authenticated) loadDashboard();
+  }, [authenticated, loadDashboard]);
+
+  function resetBlogForm() {
+    setForm(emptyBlog);
+    setEditingId(null);
+    setEditorResetKey((key) => key + 1);
   }
 
-  const featured = blogs[0] || null;
-  const rest = blogs.slice(1);
+  function resetCategoryForm() {
+    setCategoryForm(emptyCategory);
+    setEditingCategoryId(null);
+  }
+
+  async function handleLogin(event) {
+    event.preventDefault();
+    setSigningIn(true);
+    setError("");
+    try {
+      await loginAdmin(password);
+      setPassword("");
+      setAuthenticated(true);
+    } catch (loginError) {
+      setError(loginError.message || "Sign in failed.");
+    } finally {
+      setSigningIn(false);
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await logoutAdmin();
+      setAuthenticated(false);
+      setBlogs([]);
+      setBlogTotal(0);
+      setCategories([]);
+      setBlogPage(1);
+      setBlogTotalPages(1);
+      resetBlogForm();
+    } catch (logoutError) {
+      setError(logoutError.message || "Sign out failed.");
+    }
+  }
+
+  async function editBlog(blog) {
+    setLoadingEdit(blog._id);
+    setError("");
+    setNotice("");
+    try {
+      const result = await getAdminBlogById(blog._id);
+      if (!result?.data) throw new Error("Could not load this article for editing.");
+      const fullBlog = result.data;
+      const category = categories.find(
+        (item) => !getParentId(item) && (item.slug === fullBlog.categorySlug || item.name === fullBlog.category)
+      );
+      const subcategory = categories.find(
+        (item) =>
+          getParentId(item) === category?._id &&
+          (item.slug === fullBlog.subcategorySlug || item.name === fullBlog.subcategory)
+      );
+      setForm({
+        ...emptyBlog,
+        title: fullBlog.title || "",
+        excerpt: fullBlog.excerpt || "",
+        content: fullBlog.content || "",
+        categoryId: category?._id || "",
+        subcategoryId: subcategory?._id || "",
+        tags: Array.isArray(fullBlog.tags) ? fullBlog.tags.join(", ") : "",
+        author: fullBlog.author || "",
+        coverImage: fullBlog.coverImage || "",
+        coverImageAlt: fullBlog.coverImageAlt || "",
+        seoTitle: fullBlog.seoTitle || "",
+        seoDescription: fullBlog.seoDescription || "",
+        noIndex: Boolean(fullBlog.noIndex),
+        published: fullBlog.published !== false,
+      });
+      setEditingId(fullBlog._id);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (editError) {
+      setError(editError.message || "Failed to load article.");
+    } finally {
+      setLoadingEdit(null);
+    }
+  }
+
+  async function handleBlogSubmit(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    setNotice("");
+
+    const { tags, ...fields } = form;
+    const blogData = {
+      ...fields,
+      tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean),
+    };
+
+    try {
+      if (editingId) {
+        await updateBlog(editingId, blogData);
+        setNotice("Article updated successfully.");
+      } else {
+        await createBlog(blogData);
+        setNotice("Article created successfully.");
+      }
+      resetBlogForm();
+      setBlogPage(1);
+      await loadDashboard(1);
+    } catch (saveError) {
+      setError(saveError.message || "Failed to save article.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteBlog(blog) {
+    if (!window.confirm(`Delete "${blog.title}"? This cannot be undone.`)) return;
+    setDeletingId(blog._id);
+    setError("");
+    setNotice("");
+    try {
+      await deleteBlog(blog._id);
+      if (editingId === blog._id) resetBlogForm();
+      setBlogs((current) => current.filter((item) => item._id !== blog._id));
+      setNotice("Article deleted successfully.");
+      const nextPage = blogs.length === 1 && blogPage > 1 ? blogPage - 1 : blogPage;
+      if (nextPage !== blogPage) setBlogPage(nextPage);
+      await loadDashboard(nextPage);
+    } catch (deleteError) {
+      setError(deleteError.message || "Failed to delete article.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  async function handleCategorySubmit(event) {
+    event.preventDefault();
+    setSavingCategory(true);
+    setError("");
+    setNotice("");
+    try {
+      if (editingCategoryId) {
+        await updateCategory(editingCategoryId, categoryForm);
+        setNotice("Category updated successfully.");
+      } else {
+        await createCategory(categoryForm);
+        setNotice(categoryForm.parentId ? "Subcategory created successfully." : "Category created successfully.");
+      }
+      resetCategoryForm();
+      await loadDashboard();
+    } catch (categoryError) {
+      setError(categoryError.message || "Failed to save category.");
+    } finally {
+      setSavingCategory(false);
+    }
+  }
+
+  function editCategory(category) {
+    setEditingCategoryId(category._id);
+    setCategoryForm({
+      name: category.name || "",
+      parentId: getParentId(category) || "",
+      description: category.description || "",
+      seoTitle: category.seoTitle || "",
+      seoDescription: category.seoDescription || "",
+    });
+  }
+
+  async function handleDeleteCategory(category) {
+    if (!window.confirm(`Delete "${category.name}"? Categories with articles or subcategories cannot be deleted.`)) return;
+    setError("");
+    try {
+      await deleteCategory(category._id);
+      setNotice("Category deleted successfully.");
+      await loadDashboard();
+    } catch (deleteError) {
+      setError(deleteError.message || "Failed to delete category.");
+    }
+  }
+
+  function updateBlogField(event) {
+    const { name, value, type, checked } = event.target;
+    setForm((current) => ({
+      ...current,
+      [name]: type === "checkbox" ? checked : value,
+      ...(name === "categoryId" ? { subcategoryId: "" } : {}),
+    }));
+  }
+
+  if (authenticated === null) {
+    return <div className="mx-auto max-w-lg px-6 py-24 text-center text-slate-600">Checking admin session…</div>;
+  }
+
+  if (!authenticated) {
+    return (
+      <section className="mx-auto max-w-md px-5 py-20">
+        <form onSubmit={handleLogin} className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-800">SportsBud Studio</p>
+          <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-950">Admin sign in</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-600">Sign in to manage articles, categories, and search metadata.</p>
+          {error && <p role="alert" className="mt-5 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>}
+          <label className="mt-6 block text-sm font-semibold text-slate-700">
+            Admin password
+            <input
+              autoComplete="current-password"
+              autoFocus
+              required
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              className={fieldClass}
+            />
+          </label>
+          <button disabled={signingIn} className="mt-5 w-full rounded-lg bg-emerald-800 px-4 py-3 font-semibold text-white hover:bg-emerald-900 disabled:opacity-60">
+            {signingIn ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
+      </section>
+    );
+  }
 
   return (
-    <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,700;0,900;1,700&family=Inter:wght@400;500;600&display=swap');
-        * { box-sizing: border-box; }
-
-        .sb-page { font-family: 'Inter', sans-serif; background: #f9fafb; min-height: 100vh; }
-
-        .sb-hero-banner {
-          background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
-          padding: 48px 24px; text-align: center; color: #fff;
-        }
-        .sb-hero-banner h1 {
-          font-family: 'Merriweather', Georgia, serif;
-          font-size: clamp(28px, 5vw, 48px); font-weight: 900;
-          margin: 0 0 12px; line-height: 1.15;
-        }
-        .sb-hero-banner p { font-size: 16px; color: #bfdbfe; margin: 0; }
-
-        .sb-layout {
-          max-width: 1200px; margin: 0 auto; padding: 40px 24px;
-          display: grid; grid-template-columns: 1fr 320px; gap: 48px;
-        }
-        @media (max-width: 900px) {
-          .sb-layout { grid-template-columns: 1fr; }
-          .sb-sidebar { display: none; }
-        }
-
-        .sb-label {
-          font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
-          text-transform: uppercase; color: #9ca3af; margin-bottom: 16px;
-          display: flex; align-items: center; gap: 8px;
-        }
-        .sb-label::after { content: ''; flex: 1; height: 1px; background: #e5e7eb; }
-
-        .sb-featured {
-          background: #fff; border-radius: 12px; overflow: hidden;
-          border: 1px solid #e5e7eb; text-decoration: none; display: block;
-          margin-bottom: 40px; transition: box-shadow 0.2s, transform 0.2s;
-        }
-        .sb-featured:hover { box-shadow: 0 12px 40px rgba(29,78,216,0.12); transform: translateY(-2px); }
-        .sb-featured:hover .sb-featured-title { color: #1d4ed8; }
-        .sb-featured-img { width: 100%; height: 320px; object-fit: cover; display: block; }
-        .sb-featured-placeholder {
-          width: 100%; height: 320px;
-          background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
-          display: flex; align-items: center; justify-content: center; font-size: 64px;
-        }
-        .sb-featured-body { padding: 24px 28px 28px; }
-        .sb-cat-pill {
-          font-size: 11px; font-weight: 700; letter-spacing: 0.07em;
-          text-transform: uppercase; padding: 4px 10px; border-radius: 20px;
-          display: inline-block; margin-bottom: 12px;
-        }
-        .sb-featured-title {
-          font-family: 'Merriweather', Georgia, serif;
-          font-size: 26px; font-weight: 900; line-height: 1.3;
-          color: #111827; margin-bottom: 10px; transition: color 0.2s;
-        }
-        .sb-featured-excerpt { font-size: 15px; color: #6b7280; line-height: 1.7; margin-bottom: 16px; }
-        .sb-featured-meta { font-size: 12px; color: #9ca3af; display: flex; gap: 16px; align-items: center; }
-        .sb-featured-meta strong { color: #374151; }
-
-        .sb-feed { display: flex; flex-direction: column; }
-        .sb-feed-item {
-          display: flex; gap: 16px; padding: 18px 8px;
-          border-bottom: 1px solid #f3f4f6; text-decoration: none;
-          align-items: flex-start; transition: background 0.15s; border-radius: 8px;
-        }
-        .sb-feed-item:last-child { border-bottom: none; }
-        .sb-feed-item:hover { background: #eff6ff; }
-        .sb-feed-item:hover .sb-feed-title { color: #1d4ed8; }
-        .sb-feed-thumb { width: 110px; height: 74px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
-        .sb-feed-placeholder {
-          width: 110px; height: 74px;
-          background: linear-gradient(135deg, #dbeafe, #bfdbfe);
-          border-radius: 8px; flex-shrink: 0;
-          display: flex; align-items: center; justify-content: center; font-size: 24px;
-        }
-        .sb-feed-body { flex: 1; min-width: 0; }
-        .sb-feed-cat { font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; margin-bottom: 4px; display: inline-block; }
-        .sb-feed-title {
-          font-family: 'Merriweather', Georgia, serif;
-          font-size: 15px; font-weight: 700; line-height: 1.4; color: #111827;
-          margin-bottom: 6px; transition: color 0.2s;
-          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-        }
-        .sb-feed-meta { font-size: 11px; color: #9ca3af; display: flex; gap: 8px; }
-
-        .sb-sidebar-card {
-          background: #fff; border: 1px solid #e5e7eb;
-          border-radius: 12px; padding: 20px; margin-bottom: 24px;
-        }
-        .sb-sidebar-title {
-          font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
-          text-transform: uppercase; color: #9ca3af; margin-bottom: 16px;
-          padding-bottom: 10px; border-bottom: 1px solid #f3f4f6;
-        }
-        .sb-trending-item {
-          display: flex; gap: 12px; align-items: flex-start;
-          padding: 10px 0; border-bottom: 1px solid #f9fafb; text-decoration: none;
-        }
-        .sb-trending-item:last-child { border-bottom: none; }
-        .sb-trending-item:hover .sb-trending-title { color: #1d4ed8; }
-        .sb-trending-num { font-size: 18px; font-weight: 800; color: #e5e7eb; min-width: 24px; line-height: 1; }
-        .sb-trending-title { font-size: 13px; font-weight: 600; color: #1f2937; line-height: 1.4; transition: color 0.2s; }
-
-        .sb-pagination { display: flex; gap: 6px; justify-content: center; margin-top: 32px; }
-        .sb-page-btn {
-          width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
-          border-radius: 8px; border: 1px solid #e5e7eb; font-size: 13px; font-weight: 600;
-          text-decoration: none; color: #6b7280; background: #fff; transition: all 0.15s;
-        }
-        .sb-page-btn:hover { border-color: #1d4ed8; color: #1d4ed8; background: #eff6ff; }
-        .sb-page-btn.active { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
-      `}</style>
-
-      <div className="sb-page">
-
-        {/* Hero */}
-        <div className="sb-hero-banner">
-          <h1>Your Sports, Your Way 🏆</h1>
-          <p>Latest cricket news, match analysis & player insights — all in one place</p>
+    <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:py-12">
+      <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-emerald-800">SportsBud Studio</p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">Editorial dashboard</h1>
+          <p className="mt-2 text-slate-600">Publish, organize, and optimize your cricket coverage.</p>
         </div>
+        <div className="flex items-center gap-4">
+          <Link href="/" className="text-sm font-semibold text-emerald-800 hover:text-emerald-950">View website →</Link>
+          <button onClick={handleLogout} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-white">Sign out</button>
+        </div>
+      </header>
 
-        <div className="sb-layout">
+      {error && <p role="alert" className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>}
+      {notice && <p role="status" className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{notice}</p>}
 
-          {/* Main feed */}
-          <div>
-            {blogs.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "60px 20px", color: "#9ca3af" }}>
-                <div style={{ fontSize: "48px", marginBottom: "12px" }}>🏆</div>
-                <p>No articles yet. Check back soon!</p>
+      <section className="mb-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <div className="mb-5">
+          <h2 className="text-xl font-bold text-slate-950">Content taxonomy</h2>
+          <p className="mt-1 text-sm text-slate-600">Create SEO-ready categories and nested subcategories for your articles.</p>
+        </div>
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+          <form onSubmit={handleCategorySubmit} className="space-y-4 rounded-xl bg-slate-50 p-4">
+            <h3 className="font-semibold text-slate-900">{editingCategoryId ? "Edit category" : "Add a category or subcategory"}</h3>
+            <label className="block text-sm font-medium text-slate-700">
+              Name
+              <input required maxLength={80} value={categoryForm.name} onChange={(event) => setCategoryForm({ ...categoryForm, name: event.target.value })} className={fieldClass} />
+            </label>
+            <label className="block text-sm font-medium text-slate-700">
+              Parent category <span className="font-normal text-slate-500">{editingCategoryId ? "(fixed after creation)" : "(leave empty for a top-level category)"}</span>
+              <select disabled={Boolean(editingCategoryId)} value={categoryForm.parentId} onChange={(event) => setCategoryForm({ ...categoryForm, parentId: event.target.value })} className={fieldClass}>
+                <option value="">Top-level category</option>
+                {topLevelCategories.filter((item) => item._id !== editingCategoryId).map((item) => <option key={item._id} value={item._id}>{item.name}</option>)}
+              </select>
+            </label>
+            <label className="block text-sm font-medium text-slate-700">
+              Description
+              <textarea maxLength={300} rows={2} value={categoryForm.description} onChange={(event) => setCategoryForm({ ...categoryForm, description: event.target.value })} className={fieldClass} />
+            </label>
+            <label className="block text-sm font-medium text-slate-700">SEO title <span className="font-normal text-slate-500">(up to 70 characters)</span>
+              <input maxLength={70} value={categoryForm.seoTitle} onChange={(event) => setCategoryForm({ ...categoryForm, seoTitle: event.target.value })} className={fieldClass} />
+            </label>
+            <label className="block text-sm font-medium text-slate-700">Meta description <span className="font-normal text-slate-500">(up to 160 characters)</span>
+              <textarea maxLength={160} rows={2} value={categoryForm.seoDescription} onChange={(event) => setCategoryForm({ ...categoryForm, seoDescription: event.target.value })} className={fieldClass} />
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button disabled={savingCategory} className="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60">
+                {savingCategory ? "Saving…" : editingCategoryId ? "Save category" : "Create category"}
+              </button>
+              {editingCategoryId && <button type="button" onClick={resetCategoryForm} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700">Cancel edit</button>}
+            </div>
+          </form>
+
+          <div className="divide-y divide-slate-100">
+            {categories.length === 0 ? <p className="py-6 text-sm text-slate-500">No categories yet.</p> : categories.map((category) => (
+              <div key={category._id} className="flex items-center justify-between gap-3 py-3">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-slate-900">{getParentId(category) ? "↳ " : ""}{category.name}</p>
+                  <p className="truncate text-xs text-slate-500">/{category.slug}</p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <button onClick={() => editCategory(category)} className="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-700">Edit</button>
+                  <button onClick={() => handleDeleteCategory(category)} className="rounded-md border border-red-200 px-2.5 py-1.5 text-xs font-semibold text-red-700">Delete</button>
+                </div>
               </div>
-            ) : (
-              <>
-                {featured && (
-                  <>
-                    <p className="sb-label">Top Story</p>
-                    <Link href={`/Blog/${featured.slug}`} className="sb-featured">
-                      {featured.coverImage ? (
-                        <img src={featured.coverImage} alt={featured.title} className="sb-featured-img" />
-                      ) : (
-                        <div className="sb-featured-placeholder">🏆</div>
-                      )}
-                      <div className="sb-featured-body">
-                        {(() => {
-                          const c = categoryColors[featured.category] || { bg: "#f3f4f6", text: "#374151" };
-                          return <span className="sb-cat-pill" style={{ background: c.bg, color: c.text }}>{featured.category}</span>;
-                        })()}
-                        <div className="sb-featured-title">{featured.title}</div>
-                        <div className="sb-featured-excerpt">{featured.excerpt}</div>
-                        <div className="sb-featured-meta">
-                          <span><strong>{featured.author}</strong></span>
-                          <span>·</span>
-                          <span>{timeAgo(featured.createdAt)}</span>
-                          <span>·</span>
-                          <span>👁 {featured.views} views</span>
-                        </div>
-                      </div>
-                    </Link>
-                  </>
-                )}
+            ))}
+          </div>
+        </div>
+      </section>
 
-                {rest.length > 0 && (
-                  <>
-                    <p className="sb-label">Latest · {total} articles</p>
-                    <div className="sb-feed">
-                      {rest.map((blog) => {
-                        const c = categoryColors[blog.category] || { bg: "#f3f4f6", text: "#374151" };
-                        return (
-                          <Link key={blog._id} href={`/Blog/${blog.slug}`} className="sb-feed-item">
-                            {blog.coverImage ? (
-                              <img src={blog.coverImage} alt={blog.title} className="sb-feed-thumb" />
-                            ) : (
-                              <div className="sb-feed-placeholder">🏆</div>
-                            )}
-                            <div className="sb-feed-body">
-                              <span className="sb-feed-cat" style={{ color: c.text }}>{blog.category}</span>
-                              <div className="sb-feed-title">{blog.title}</div>
-                              <div className="sb-feed-meta">
-                                <span>{blog.author}</span>
-                                <span>·</span>
-                                <span>{timeAgo(blog.createdAt)}</span>
-                                <span>·</span>
-                                <span>{blog.views} views</span>
-                              </div>
-                            </div>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-
-                {totalPages > 1 && (
-                  <div className="sb-pagination">
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                      <Link key={p} href={`/?page=${p}`} className={`sb-page-btn${p === page ? " active" : ""}`}>{p}</Link>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
+      <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+        <form onSubmit={handleBlogSubmit} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+          <div className="mb-6 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-800">{editingId ? "Update article" : "New article"}</p>
+              <h2 className="mt-1 text-xl font-bold text-slate-950">{editingId ? "Edit your story" : "Write a story"}</h2>
+            </div>
+            {editingId && <button type="button" onClick={resetBlogForm} className="text-sm font-semibold text-slate-600 hover:text-slate-950">Cancel edit</button>}
           </div>
 
-          {/* Sidebar */}
-          <aside className="sb-sidebar">
-            <div className="sb-sidebar-card">
-              <div className="sb-sidebar-title">🔥 Trending Now</div>
-              {[...blogs].sort((a, b) => b.views - a.views).slice(0, 5).map((blog, i) => (
-                <Link key={blog._id} href={`/Blog/${blog.slug}`} className="sb-trending-item">
-                  <span className="sb-trending-num">{i + 1}</span>
-                  <span className="sb-trending-title">{blog.title}</span>
-                </Link>
-              ))}
+          <div className="space-y-4">
+            <label className="block text-sm font-medium text-slate-700">Headline
+              <input required maxLength={200} name="title" value={form.title} onChange={updateBlogField} className={fieldClass} />
+            </label>
+            <p className="-mt-2 text-xs text-slate-500">
+              Article URL: <code className="font-mono text-slate-700">/Blog/{slugPreview(form.title)}</code>
+              <span className="ml-1">(generated from the headline)</span>
+            </p>
+            <label className="block text-sm font-medium text-slate-700">Excerpt
+              <textarea required maxLength={500} rows={3} name="excerpt" value={form.excerpt} onChange={updateBlogField} className={fieldClass} />
+            </label>
+            <div>
+              <label className="block text-sm font-medium text-slate-700" id="article-content-label">Article content</label>
+              <QuillEditor
+                key={editingId || `new-${editorResetKey}`}
+                initialContent={form.content}
+                onChange={(content) => setForm((current) => ({ ...current, content }))}
+              />
             </div>
 
-            <div className="sb-sidebar-card">
-              <div className="sb-sidebar-title">📂 Categories</div>
-              {Object.entries(categoryColors).map(([cat, c]) => {
-                const count = blogs.filter((b) => b.category === cat).length;
-                return (
-                  <div key={cat} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f9fafb" }}>
-                    <span style={{ fontSize: "13px", fontWeight: 600, color: "#374151" }}>{cat}</span>
-                    <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "20px", background: c.bg, color: c.text }}>{count}</span>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm font-medium text-slate-700">Category
+                <select required name="categoryId" value={form.categoryId} onChange={updateBlogField} className={fieldClass}>
+                  <option value="">Choose category</option>
+                  {topLevelCategories.map((category) => <option key={category._id} value={category._id}>{category.name}</option>)}
+                </select>
+              </label>
+              <label className="block text-sm font-medium text-slate-700">Subcategory <span className="font-normal text-slate-500">(optional)</span>
+                <select name="subcategoryId" value={form.subcategoryId} onChange={updateBlogField} disabled={!form.categoryId || subcategories.length === 0} className={fieldClass}>
+                  <option value="">No subcategory</option>
+                  {subcategories.map((category) => <option key={category._id} value={category._id}>{category.name}</option>)}
+                </select>
+              </label>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm font-medium text-slate-700">Author
+                <input required name="author" value={form.author} onChange={updateBlogField} className={fieldClass} />
+              </label>
+              <label className="block text-sm font-medium text-slate-700">Tags <span className="font-normal text-slate-500">(comma-separated)</span>
+                <input name="tags" value={form.tags} onChange={updateBlogField} placeholder="Cricket, India, Match report" className={fieldClass} />
+              </label>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 p-4">
+              <h3 className="font-semibold text-slate-900">Search and social preview</h3>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Optional overrides. The article headline and excerpt are used when these fields are blank.</p>
+              <div className="mt-3 space-y-3">
+                <label className="block text-sm font-medium text-slate-700">SEO title <span className="font-normal text-slate-500">(up to 70 characters)</span>
+                  <input maxLength={70} name="seoTitle" value={form.seoTitle} onChange={updateBlogField} className={fieldClass} />
+                </label>
+                <label className="block text-sm font-medium text-slate-700">Meta description <span className="font-normal text-slate-500">(up to 160 characters)</span>
+                  <textarea maxLength={160} rows={2} name="seoDescription" value={form.seoDescription} onChange={updateBlogField} className={fieldClass} />
+                </label>
+                <p className="text-xs leading-5 text-slate-500">Canonical URL is generated automatically from your site URL and this article’s title-based slug. It updates automatically if the headline changes.</p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm font-medium text-slate-700">Cover image URL <span className="font-normal text-slate-500">(optional)</span>
+                <input type="url" name="coverImage" value={form.coverImage} onChange={updateBlogField} className={fieldClass} />
+              </label>
+              <label className="block text-sm font-medium text-slate-700">Image alt text
+                <input maxLength={250} name="coverImageAlt" value={form.coverImageAlt} onChange={updateBlogField} className={fieldClass} />
+              </label>
+            </div>
+            <div className="flex flex-wrap gap-x-6 gap-y-3 rounded-lg bg-slate-50 p-3 text-sm">
+              <label className="flex items-center gap-2 font-medium text-slate-700"><input type="checkbox" name="published" checked={form.published} onChange={updateBlogField} className="accent-emerald-800" /> Published</label>
+              <label className="flex items-center gap-2 font-medium text-slate-700"><input type="checkbox" name="noIndex" checked={form.noIndex} onChange={updateBlogField} className="accent-emerald-800" /> Exclude from search engines</label>
+            </div>
+          </div>
+
+          <button type="submit" disabled={saving || loadingEdit !== null || topLevelCategories.length === 0} className="mt-6 w-full rounded-lg bg-emerald-800 px-4 py-3 font-semibold text-white transition hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-60">
+            {saving ? "Saving…" : editingId ? "Save article" : "Create article"}
+          </button>
+          {topLevelCategories.length === 0 && <p className="mt-3 text-sm text-amber-800">Create a category before publishing an article.</p>}
+        </form>
+
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-5 sm:px-6">
+            <div>
+              <h2 className="text-xl font-bold text-slate-950">Articles</h2>
+              <p className="mt-1 text-sm text-slate-500">{blogTotal} {blogTotal === 1 ? "story" : "stories"}</p>
+            </div>
+            <button type="button" onClick={() => loadDashboard(blogPage)} disabled={loadingBlogs} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+              {loadingBlogs ? "Loading…" : "Refresh"}
+            </button>
+          </div>
+          {loadingBlogs ? <p className="px-6 py-10 text-center text-sm text-slate-500">Loading articles…</p> : blogs.length === 0 ? (
+            <p className="px-6 py-10 text-center text-sm text-slate-500">No articles yet. Create your first story with the editor.</p>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {blogs.map((blog) => (
+                <li key={blog._id} className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                  <div className="min-w-0">
+                    <h3 className="truncate font-semibold text-slate-900">{blog.title || "Untitled article"}</h3>
+                    <p className="mt-1 text-sm text-slate-500">{[blog.category, blog.subcategory].filter(Boolean).join(" / ")} · {blog.published === false ? "Draft" : "Published"} · {formatDate(blog.updatedAt || blog.createdAt)}</p>
                   </div>
-                );
-              })}
+                  <div className="flex shrink-0 gap-2">
+                    <button type="button" onClick={() => editBlog(blog)} disabled={loadingEdit !== null || deletingId !== null} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60">{loadingEdit === blog._id ? "Loading…" : "Edit"}</button>
+                    <button type="button" onClick={() => handleDeleteBlog(blog)} disabled={deletingId !== null || loadingEdit !== null} aria-label={`Delete ${blog.title || "article"}`} className="rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-60">{deletingId === blog._id ? "Deleting…" : "Delete"}</button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          {blogTotalPages > 1 && (
+            <div className="flex items-center justify-between border-t border-slate-200 px-5 py-4">
+              <button type="button" onClick={() => setBlogPage((page) => Math.max(1, page - 1))} disabled={blogPage === 1 || loadingBlogs} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">Previous</button>
+              <span className="text-sm text-slate-600">Page {blogPage} of {blogTotalPages}</span>
+              <button type="button" onClick={() => setBlogPage((page) => Math.min(blogTotalPages, page + 1))} disabled={blogPage === blogTotalPages || loadingBlogs} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">Next</button>
             </div>
-
-            <div className="sb-sidebar-card" style={{ background: "linear-gradient(135deg, #1d4ed8, #1e40af)", border: "none" }}>
-              <div style={{ color: "#bfdbfe", fontSize: "11px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "10px" }}>About SportsBud</div>
-              <p style={{ color: "#fff", fontSize: "13px", lineHeight: 1.6, margin: "0 0 14px" }}>Your go-to destination for cricket news, match analysis and player insights.</p>
-              <Link href="/subscribe" style={{ display: "inline-block", background: "#fff", color: "#1d4ed8", fontSize: "12px", fontWeight: 700, padding: "8px 16px", borderRadius: "6px", textDecoration: "none" }}>
-                Subscribe Free →
-              </Link>
-            </div>
-          </aside>
-        </div>
+          )}
+        </section>
       </div>
-    </>
+    </section>
   );
 }

@@ -3,6 +3,8 @@
 import { getBlogBySlug, getBlogs } from "@/lib/api";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { serializeJsonLd, siteName, siteUrl } from "@/lib/site";
+import { sanitizeArticleHtml } from "@/lib/article-content";
 
 export async function generateStaticParams() {
   return [];
@@ -10,37 +12,88 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }) {
   try {
-     const { slug } = await params;
+    const { slug } = await params;
     const result = await getBlogBySlug(slug);
-    if (!result?.data) return { title: "Cricket Chronicles" };
+    if (!result?.data) {
+      return {
+        title: "Article not found",
+        robots: { index: false, follow: false },
+      };
+    }
+
+    const blog = result.data;
+    const canonicalUrl = `${siteUrl}/Blog/${encodeURIComponent(blog.slug || slug)}`;
+    const description = blog.seoDescription || blog.excerpt || `Read ${blog.title} on ${siteName}.`;
+    const title = blog.seoTitle || blog.title;
+    const image = blog.coverImage
+      ? [{ url: blog.coverImage, alt: blog.coverImageAlt || blog.title }]
+      : undefined;
+
     return {
-      title: `${result.data.title} | Cricket Chronicles`,
-      description: result.data.excerpt,
+      title,
+      description,
+      keywords: [blog.category, blog.subcategory, ...(blog.tags || [])].filter(Boolean),
+      alternates: { canonical: canonicalUrl },
+      robots: blog.noIndex ? { index: false, follow: true } : undefined,
+      openGraph: {
+        type: "article",
+        url: canonicalUrl,
+        title,
+        description,
+        siteName,
+        publishedTime: blog.createdAt,
+        modifiedTime: blog.updatedAt || blog.createdAt,
+        authors: blog.author ? [blog.author] : undefined,
+        section: [blog.category, blog.subcategory].filter(Boolean).join(" / "),
+        tags: blog.tags,
+        images: image,
+      },
+      twitter: {
+        card: blog.coverImage ? "summary_large_image" : "summary",
+        title,
+        description,
+        images: blog.coverImage ? [blog.coverImage] : undefined,
+      },
     };
-  } catch { return { title: "Cricket Chronicles" }; }
+  } catch (error) {
+    console.error("Failed to generate article metadata:", error.message);
+    return { title: "Sports News & Analysis" };
+  }
 }
 
 function renderContent(content) {
+  if (/<\/?[a-z][\s\S]*?>/i.test(content)) {
+    return sanitizeArticleHtml(content);
+  }
+
   const lines = content.trim().split("\n");
   const html = [];
   let inList = false;
+  const escapeHtml = (value) =>
+    value.replace(/[&<>"']/g, (character) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    })[character]);
   for (const raw of lines) {
     const line = raw.trim();
     if (line.startsWith("## ")) {
       if (inList) { html.push("</ul>"); inList = false; }
-      html.push(`<h2>${line.slice(3)}</h2>`);
+      html.push(`<h2>${escapeHtml(line.slice(3))}</h2>`);
     } else if (line.startsWith("### ")) {
       if (inList) { html.push("</ul>"); inList = false; }
-      html.push(`<h3>${line.slice(4)}</h3>`);
+      html.push(`<h3>${escapeHtml(line.slice(4))}</h3>`);
     } else if (line.startsWith("- ")) {
       if (!inList) { html.push("<ul>"); inList = true; }
-      html.push(`<li>${line.slice(2)}</li>`);
+      html.push(`<li>${escapeHtml(line.slice(2))}</li>`);
     } else if (line === "") {
       if (inList) { html.push("</ul>"); inList = false; }
       html.push("<br/>");
     } else {
       if (inList) { html.push("</ul>"); inList = false; }
-      html.push(`<p>${line}</p>`);
+      html.push(`<p>${escapeHtml(line)}</p>`);
     }
   }
   if (inList) html.push("</ul>");
@@ -67,13 +120,75 @@ export default async function BlogDetailPage({ params }) {
 
   if (!blog) notFound();
 
+  const articleUrl = `${siteUrl}/Blog/${encodeURIComponent(blog.slug)}`;
+  const articleStructuredData = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    mainEntityOfPage: {
+      "@type": "WebPage",
+      "@id": articleUrl,
+    },
+    headline: blog.title,
+    description: blog.excerpt || `Read ${blog.title} on ${siteName}.`,
+    image: blog.coverImage ? [blog.coverImage] : undefined,
+    datePublished: blog.createdAt,
+    dateModified: blog.updatedAt || blog.createdAt,
+    author: {
+      "@type": "Person",
+      name: blog.author || siteName,
+    },
+    publisher: {
+      "@type": "Organization",
+      name: siteName,
+      url: siteUrl,
+      logo: {
+        "@type": "ImageObject",
+        url: `${siteUrl}/favicon.ico`,
+      },
+    },
+    articleSection: blog.category,
+    keywords: blog.tags?.length ? blog.tags : blog.category,
+    inLanguage: "en-IN",
+  };
+
+  const breadcrumbStructuredData = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: siteUrl,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: blog.title,
+        item: articleUrl,
+      },
+    ],
+  };
+
   try {
-    const result = await getBlogs({ category: blog.category, limit: 4 });
+    const result = await getBlogs({ category: blog.categorySlug || blog.category, limit: 4 });
     related = (result.data || []).filter((b) => b.slug !== blog.slug).slice(0, 3);
   } catch {}
 
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: serializeJsonLd(articleStructuredData),
+        }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: serializeJsonLd(breadcrumbStructuredData),
+        }}
+      />
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Source+Serif+4:wght@400;600&display=swap');
         .article-page { font-family: 'Source Serif 4', Georgia, serif; background: #f7f5f0; min-height: 100vh; }
@@ -103,7 +218,9 @@ export default async function BlogDetailPage({ params }) {
         .meta-stat { font-size: 12px; color: #9ca3af; }
         .article-body h2 { font-family: 'Playfair Display', Georgia, serif; font-size: 22px; font-weight: 900; color: #0f1a10; margin: 32px 0 12px; border-bottom: 2px solid #dcfce7; padding-bottom: 8px; }
         .article-body h3 { font-family: 'Playfair Display', Georgia, serif; font-size: 18px; font-weight: 700; color: #1f2937; margin: 24px 0 10px; }
+        .article-body h4 { font-size: 16px; font-weight: 700; color: #1f2937; margin: 20px 0 8px; }
         .article-body p { font-size: 17px; line-height: 1.8; color: #374151; margin-bottom: 16px; }
+        .article-body img { max-width: 100%; height: auto; border-radius: 8px; margin: 24px auto; }
         .article-body ul { margin: 0 0 16px 20px; list-style: disc; }
         .article-body li { font-size: 17px; line-height: 1.8; color: #374151; margin-bottom: 6px; }
         .tags-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 32px; padding-top: 20px; border-top: 1px solid #e5e7eb; }
@@ -122,7 +239,7 @@ export default async function BlogDetailPage({ params }) {
 
       <div className="article-page">
         {blog.coverImage ? (
-          <img src={blog.coverImage} alt={blog.title} className="article-hero" />
+          <img src={blog.coverImage} alt={blog.coverImageAlt || blog.title} className="article-hero" />
         ) : (
           <div className="article-hero-placeholder">🏏</div>
         )}
@@ -134,7 +251,13 @@ export default async function BlogDetailPage({ params }) {
               <span className="breadcrumb-sep">›</span>
               <Link href="/">Cricket News</Link>
               <span className="breadcrumb-sep">›</span>
-              <Link href={`/?category=${encodeURIComponent(blog.category)}`}>{blog.category}</Link>
+              <Link href={`/category/${blog.categorySlug || encodeURIComponent(blog.category.toLowerCase().replace(/\s+/g, "-"))}`}>{blog.category}</Link>
+              {blog.subcategory && (
+                <>
+                  <span className="breadcrumb-sep">›</span>
+                  <Link href={`/category/${blog.categorySlug}/${blog.subcategorySlug}`}>{blog.subcategory}</Link>
+                </>
+              )}
             </nav>
 
             <Link href="/" className="back-link">← Back to all articles</Link>

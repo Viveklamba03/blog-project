@@ -1,18 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-
-const navLinks = [
-  { label: "Home", href: "/" },
-  { label: "Cricket", href: "/cricket" },
-  { label: "Football", href: "/football" },
-  { label: "Players", href: "/players" },
-  { label: "News", href: "/news" },
-];
+import { getCategories } from "@/lib/api";
 
 const Header = () => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [categories, setCategories] = useState([]);
+
+  useEffect(() => {
+    getCategories()
+      .then((result) => setCategories((result.data || []).filter((category) => !category.parent)))
+      .catch((error) => console.error("Failed to load navigation categories:", error.message));
+  }, []);
+
+  const navLinks = [
+    { label: "Home", href: "/" },
+    ...categories.map((category) => ({ label: category.name, href: `/category/${category.slug}` })),
+  ];
 
   return (
     <>
@@ -203,8 +208,8 @@ const Header = () => {
                 {link.label}
               </Link>
             ))}
-            <Link href="/subscribe" className="sb-cta">
-              Subscribe
+            <Link href="/admin" className="sb-cta">
+              Admin
             </Link>
           </nav>
 
@@ -212,7 +217,7 @@ const Header = () => {
           <button
             className={`sb-hamburger ${menuOpen ? "open" : ""}`}
             onClick={() => setMenuOpen(!menuOpen)}
-            aria-label="Toggle menu"
+            aria-label="Toggle navigation menu"
             aria-expanded={menuOpen}
           >
             <span />
@@ -233,12 +238,8 @@ const Header = () => {
                 {link.label}
               </Link>
             ))}
-            <Link
-              href="/subscribe"
-              onClick={() => setMenuOpen(false)}
-              style={{ color: "#1d4ed8", fontWeight: 600 }}
-            >
-              Subscribe →
+            <Link href="/admin" onClick={() => setMenuOpen(false)} style={{ color: "#1d4ed8", fontWeight: 600 }}>
+              Admin →
             </Link>
           </div>
         )}

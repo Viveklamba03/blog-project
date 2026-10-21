@@ -1,16 +1,88 @@
 import "./globals.css";
 import Header from "@/Components/Header";
 import Link from "next/link";
+import { serializeJsonLd, siteName, siteUrl } from "@/lib/site";
 
 export const metadata = {
-  title: "Cricket Chronicle",
-  description: "Latest Cricket News, Match Analysis & Player Insights",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "Sports News & Analysis",
+    template: "%s | SportsBud",
+  },
+  description:
+    "Read the latest sports news, cricket coverage, match analysis, series previews and player insights on SportsBud.",
+  applicationName: siteName,
+  authors: [{ name: siteName, url: siteUrl }],
+  creator: siteName,
+  publisher: siteName,
+  category: "sports",
+  keywords: [
+    "sports news",
+    "cricket news",
+    "cricket analysis",
+    "match analysis",
+    "player insights",
+    "series previews",
+  ],
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_IN",
+    url: siteUrl,
+    siteName,
+    title: "Sports News & Analysis | SportsBud",
+    description:
+      "The latest sports news, cricket coverage, match analysis and player insights.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Sports News & Analysis | SportsBud",
+    description:
+      "The latest sports news, cricket coverage, match analysis and player insights.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
 };
 
 export default function RootLayout({ children }) {
+  const structuredData = [
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: siteName,
+      url: siteUrl,
+      logo: `${siteUrl}/favicon.ico`,
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: siteName,
+      url: siteUrl,
+      inLanguage: "en-IN",
+    },
+  ];
+
   return (
     <html lang="en">
       <body className="bg-[#f7f5f0] text-gray-900">
+        {structuredData.map((data) => (
+          <script
+            key={data["@type"]}
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: serializeJsonLd(data) }}
+          />
+        ))}
 
         {/* Header */}
         <Header />

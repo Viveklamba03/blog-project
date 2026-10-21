@@ -1,12 +1,33 @@
 // app/page.js
 
-import { getBlogs } from "@/lib/api";
+import { getBlogs, getCategories } from "@/lib/api";
 import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
+import BlogPagination from "@/Components/BlogPagination";
+import { siteUrl } from "@/lib/site";
 
-export const metadata = {
-  title: "Cricket News | Cricket Chronicles",
-  description: "Latest cricket news, match analysis and player insights",
-};
+export async function generateMetadata({ searchParams }) {
+  const params = await searchParams;
+  const requestedPage = Number.parseInt(params?.page, 10) || 1;
+  const page = Math.max(1, requestedPage);
+  const category = params?.category?.trim();
+  const query = new URLSearchParams();
+  if (category) query.set("category", category);
+  if (page > 1) query.set("page", String(page));
+  const canonical = `${siteUrl}/${query.size ? `?${query}` : ""}`;
+  const title = category
+    ? `${category} Cricket News${page > 1 ? ` – Page ${page}` : ""}`
+    : `Latest Sports News & Match Analysis${page > 1 ? ` – Page ${page}` : ""}`;
+  const description =
+    "Stay up to date with sports news, cricket coverage, match analysis, series previews and player insights from SportsBud.";
+
+  return {
+    title,
+    description,
+    alternates: { canonical },
+    openGraph: { type: "website", title, description, url: canonical },
+  };
+}
 
 const categoryColors = {
   "Match Analysis": { bg: "#dcfce7", text: "#15803d", border: "#16a34a" },
@@ -27,20 +48,41 @@ function timeAgo(dateStr) {
 }
 
 export default async function BlogPage({ searchParams }) {
-  const category = searchParams?.category || "";
-  const page = parseInt(searchParams?.page || "1");
+  const params = await searchParams;
+  const category = params?.category || "";
+  const requestedPage = Number.parseInt(params?.page, 10) || 1;
+  const page = Math.max(1, requestedPage);
+  if (requestedPage < 1) redirect("/");
 
   let blogs = [];
+  let categories = [];
   let totalPages = 1;
   let total = 0;
+  let blogLoadFailed = false;
 
   try {
     const result = await getBlogs({ category, page, limit: 15 });
     blogs = result.data || [];
-    totalPages = result.totalPages || 1;
+    totalPages = Math.max(1, Number(result.totalPages) || 1);
     total = result.total || 0;
   } catch (err) {
+    blogLoadFailed = true;
     console.error("Failed to fetch blogs:", err.message);
+  }
+  if (!blogLoadFailed && page > totalPages) {
+    if (total > 0) {
+      const query = new URLSearchParams();
+      if (category) query.set("category", category);
+      if (totalPages > 1) query.set("page", String(totalPages));
+      redirect(`/${query.size ? `?${query}` : ""}`);
+    }
+    notFound();
+  }
+  try {
+    const result = await getCategories();
+    categories = result.data || [];
+  } catch (err) {
+    console.error("Failed to fetch categories:", err.message);
   }
 
   const featured = blogs[0] || null;
@@ -73,6 +115,13 @@ export default async function BlogPage({ searchParams }) {
           border-bottom: 1px solid #e5e7eb;
           padding-bottom: 10px;
           margin-bottom: 20px;
+        }
+
+        .page-title {
+          font-size: clamp(26px, 4vw, 36px);
+          line-height: 1.2;
+          margin: 0 0 24px;
+          color: #111827;
         }
 
         .hero-card {
@@ -133,6 +182,13 @@ export default async function BlogPage({ searchParams }) {
 
           {/* Left */}
           <div>
+            <h1 className="page-title">Latest Sports News &amp; Cricket Analysis</h1>
+            <nav aria-label="Article categories" className="mb-7 flex flex-wrap gap-2">
+              <Link href="/" className="rounded-full border border-gray-300 px-3 py-1.5 text-sm font-semibold text-gray-700 hover:border-emerald-700 hover:text-emerald-800">All stories</Link>
+              {categories.filter((item) => !item.parent).map((item) => (
+                <Link key={item._id} href={`/category/${item.slug}`} className="rounded-full border border-gray-300 px-3 py-1.5 text-sm font-semibold text-gray-700 hover:border-emerald-700 hover:text-emerald-800">{item.name}</Link>
+              ))}
+            </nav>
             {blogs.length === 0 ? (
               <p>No articles found</p>
             ) : (
@@ -141,7 +197,7 @@ export default async function BlogPage({ searchParams }) {
                   <>
                     <p className="section-head">Top Story</p>
                     <Link href={`/Blog/${featured.slug}`} className="hero-card">
-                      <img src={featured.coverImage} className="hero-img" />
+                      {featured.coverImage && <img src={featured.coverImage} alt={featured.coverImageAlt || featured.title} className="hero-img" />}
                       <div className="hero-body">
                         <div className="hero-title">{featured.title}</div>
                         <p>{featured.excerpt}</p>
@@ -152,7 +208,7 @@ export default async function BlogPage({ searchParams }) {
 
                 {rest.map((blog) => (
                   <Link key={blog._id} href={`/Blog/${blog.slug}`} className="feed-item">
-                    <img src={blog.coverImage} className="feed-thumb" />
+                    {blog.coverImage && <img src={blog.coverImage} alt={blog.coverImageAlt || blog.title} className="feed-thumb" />}
                     <div>
                       <div className="feed-title">{blog.title}</div>
                       <p>{blog.excerpt}</p>
@@ -160,15 +216,7 @@ export default async function BlogPage({ searchParams }) {
                   </Link>
                 ))}
 
-                {totalPages > 1 && (
-                  <div className="pagination">
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                      <Link key={p} href={`/?page=${p}`} className="page-btn">
-                        {p}
-                      </Link>
-                    ))}
-                  </div>
-                )}
+                <BlogPagination basePath={category ? `/?category=${encodeURIComponent(category)}` : "/"} currentPage={page} totalPages={totalPages} />
               </>
             )}
           </div>
