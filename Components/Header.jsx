@@ -195,9 +195,9 @@ const Header = () => {
 
           {/* Logo */}
           <Link href="/" className="sb-logo">
-            <div className="sb-logo-badge">SB</div>
+            <div className="sb-logo-badge">SJ</div>
             <div className="sb-logo-name">
-              Sports<span>Bud</span>
+              sports<span>jira</span>
             </div>
           </Link>
 
