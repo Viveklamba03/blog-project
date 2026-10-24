@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "SportsBud — Sports News & Analysis";
+export const alt = "sportsjira - Sports News & Analysis";
 export const size = {
   width: 1200,
   height: 630,
@@ -27,7 +27,7 @@ export default function OpenGraphImage() {
           SPORTS NEWS & ANALYSIS
         </div>
         <div style={{ marginTop: 24, fontSize: 88, fontWeight: 800 }}>
-          SportsBud
+          sportsjira
         </div>
         <div style={{ marginTop: 20, fontSize: 34, color: "#dbeafe" }}>
           Stories. Analysis. Cricket.

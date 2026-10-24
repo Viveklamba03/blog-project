@@ -3,6 +3,12 @@ import { siteUrl } from "@/lib/site";
 
 export const revalidate = 3600;
 
+function parseLastModified(value) {
+  if (!value) return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
 export default async function sitemap() {
   const pages = [
     {
@@ -43,14 +49,28 @@ export default async function sitemap() {
 
   try {
     const result = await getCategories();
-    for (const category of result.data || []) {
-      const parent = typeof category.parent === "object" ? category.parent : null;
+    const categories = result.data || [];
+    const categoriesById = new Map(
+      categories
+        .filter((category) => category._id && !category.parent)
+        .map((category) => [category._id, category])
+    );
+
+    for (const category of categories) {
+      if (!category.slug) continue;
+
+      const parentId =
+        typeof category.parent === "object" ? category.parent?._id : category.parent;
+      const parent = parentId ? categoriesById.get(parentId) : null;
+      if (category.parent && !parent) continue;
       const url = parent
-        ? `${siteUrl}/category/${parent.slug}/${category.slug}`
-        : `${siteUrl}/category/${category.slug}`;
+        ? `${siteUrl}/category/${encodeURIComponent(parent.slug)}/${encodeURIComponent(category.slug)}`
+        : `${siteUrl}/category/${encodeURIComponent(category.slug)}`;
+      const lastModified = parseLastModified(category.updatedAt);
+
       pages.push({
         url,
-        ...(category.updatedAt ? { lastModified: new Date(category.updatedAt) } : {}),
+        ...(lastModified ? { lastModified } : {}),
         changeFrequency: "weekly",
         priority: parent ? 0.5 : 0.6,
       });

@@ -316,7 +316,7 @@ export default function AdminPage() {
     return (
       <section className="mx-auto max-w-md px-5 py-20">
         <form onSubmit={handleLogin} className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-800">SportsBud Studio</p>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-800">sportsjira Studio</p>
           <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-950">Admin sign in</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">Sign in to manage articles, categories, and search metadata.</p>
           {error && <p role="alert" className="mt-5 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>}
@@ -344,7 +344,7 @@ export default function AdminPage() {
     <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:py-12">
       <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-emerald-800">SportsBud Studio</p>
+          <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-emerald-800">sportsjira Studio</p>
           <h1 className="text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">Editorial dashboard</h1>
           <p className="mt-2 text-slate-600">Publish, organize, and optimize your cricket coverage.</p>
         </div>

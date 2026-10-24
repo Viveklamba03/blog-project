@@ -142,7 +142,7 @@ export default async function CategoryPage({ params, searchParams }) {
         <span aria-current="page" className="text-slate-800">{current.name}</span>
       </nav>
       <header className="max-w-3xl border-b border-slate-200 pb-7">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-800">{subcategory ? category.name : "SportsBud"}</p>
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-800">{subcategory ? category.name : siteName}</p>
         <h1 className="mt-3 text-4xl font-bold tracking-tight text-slate-950">{current.name}</h1>
         <p className="mt-3 text-lg leading-7 text-slate-600">{current.description || `The latest ${current.name.toLowerCase()} cricket stories and expert analysis.`}</p>
       </header>

@@ -19,7 +19,7 @@ export async function generateMetadata({ searchParams }) {
     ? `${category} Cricket News${page > 1 ? ` – Page ${page}` : ""}`
     : `Latest Sports News & Match Analysis${page > 1 ? ` – Page ${page}` : ""}`;
   const description =
-    "Stay up to date with sports news, cricket coverage, match analysis, series previews and player insights from SportsBud.";
+    "Stay up to date with sports news, cricket coverage, match analysis, series previews and player insights from sportsjira.";
 
   return {
     title,
