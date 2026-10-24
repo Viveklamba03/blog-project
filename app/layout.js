@@ -7,10 +7,10 @@ export const metadata = {
   metadataBase: new URL(siteUrl),
   title: {
     default: "Sports News & Analysis",
-    template: "%s | sportsjira",
+    template: "%s | SportsJira",
   },
   description:
-    "Read the latest sports news, cricket coverage, match analysis, series previews and player insights on sportsjira.",
+    "Read the latest sports news, cricket coverage, match analysis, series previews and player insights on SportsJira.",
   applicationName: siteName,
   authors: [{ name: siteName, url: siteUrl }],
   creator: siteName,
@@ -32,13 +32,13 @@ export const metadata = {
     locale: "en_IN",
     url: siteUrl,
     siteName,
-    title: "Sports News & Analysis | sportsjira",
+    title: "Sports News & Analysis | SportsJira",
     description:
       "The latest sports news, cricket coverage, match analysis and player insights.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Sports News & Analysis | sportsjira",
+    title: "Sports News & Analysis | SportsJira",
     description:
       "The latest sports news, cricket coverage, match analysis and player insights.",
   },
@@ -102,7 +102,7 @@ export default function RootLayout({ children }) {
               {/* Brand */}
               <div className="text-center md:text-left">
                 <h2 className="text-xl font-extrabold tracking-tight font-serif">
-                  sportsjira
+                  SportsJira
                 </h2>
                 <p className="text-sm text-gray-500 mt-1">
                   Stories. Analysis. Cricket.
@@ -121,7 +121,7 @@ export default function RootLayout({ children }) {
 
             {/* Divider */}
             <div className="border-t border-gray-200 mt-8 pt-6 text-center text-xs text-gray-400">
-              © {new Date().getFullYear()} sportsjira. All rights reserved.
+              © {new Date().getFullYear()} SportsJira. All rights reserved.
             </div>
 
           </div>
