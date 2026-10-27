@@ -1,5 +1,7 @@
 import "./globals.css";
 import Header from "@/Components/Header";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import Link from "next/link";
 import { serializeJsonLd, siteName, siteUrl } from "@/lib/site";
 
@@ -126,6 +128,9 @@ export default function RootLayout({ children }) {
 
           </div>
         </footer>
+
+        <Analytics />
+        <SpeedInsights />
 
       </body>
     </html>
