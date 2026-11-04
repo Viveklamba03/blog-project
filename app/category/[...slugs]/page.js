@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getBlogs, getCategories } from "@/lib/api";
-import { serializeJsonLd, siteName, siteUrl } from "@/lib/site";
+import { serializeJsonLd, siteName, siteUrl, websiteId } from "@/lib/site";
 import { notFound, redirect } from "next/navigation";
 import BlogPagination from "@/Components/BlogPagination";
 
@@ -46,8 +46,16 @@ export async function generateMetadata({ params, searchParams }) {
       title,
       description,
       alternates: { canonical },
-      openGraph: { type: "website", title, description, url: canonical, siteName },
-      twitter: { card: "summary", title, description },
+      openGraph: {
+        type: "website",
+        title,
+        description,
+        url: canonical,
+        siteName,
+        locale: "en_IN",
+        images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: `${current.name} on SportsJira` }],
+      },
+      twitter: { card: "summary_large_image", title, description, images: ["/opengraph-image"] },
     };
   } catch (error) {
     console.error("Failed to generate category metadata:", error.message);
@@ -104,21 +112,35 @@ export default async function CategoryPage({ params, searchParams }) {
     {
       "@context": "https://schema.org",
       "@type": "CollectionPage",
+      "@id": `${categoryUrl}#webpage`,
       name: current.seoTitle || `${current.name} Cricket News & Analysis`,
       description: current.seoDescription || current.description,
       url: categoryUrl,
-      isPartOf: { "@type": "WebSite", name: siteName, url: siteUrl },
+      isPartOf: { "@id": websiteId },
+      breadcrumb: { "@id": `${categoryUrl}#breadcrumb` },
       mainEntity: {
         "@type": "ItemList",
+        "@id": `${categoryUrl}#articles`,
+        itemListOrder: "https://schema.org/ItemListOrderDescending",
+        numberOfItems: Number(result.total) || articles.length,
         itemListElement: articles.map((article, index) => ({
           "@type": "ListItem",
           position: (page - 1) * 15 + index + 1,
-          url: `${siteUrl}/Blog/${encodeURIComponent(article.slug)}`,
-          name: article.title,
+          item: {
+            "@type": "BlogPosting",
+            "@id": `${siteUrl}/Blog/${encodeURIComponent(article.slug)}#article`,
+            url: `${siteUrl}/Blog/${encodeURIComponent(article.slug)}`,
+            name: article.title,
+          },
         })),
       },
     },
-    { "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: breadcrumbs },
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "@id": `${categoryUrl}#breadcrumb`,
+      itemListElement: breadcrumbs,
+    },
   ];
 
   return (

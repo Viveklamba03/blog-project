@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { getCategories } from "@/lib/api";
 
 const Header = () => {
@@ -51,30 +52,11 @@ const Header = () => {
           text-decoration: none;
         }
 
-        .sb-logo-badge {
-          width: 36px;
-          height: 36px;
-          background: #1d4ed8;
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 800;
-          font-size: 15px;
-          color: #fff;
-          letter-spacing: -0.5px;
+        .sb-logo-image {
+          width: 56px;
+          height: 56px;
+          object-fit: contain;
           flex-shrink: 0;
-        }
-
-        .sb-logo-name {
-          font-size: 20px;
-          font-weight: 700;
-          color: #111827;
-          letter-spacing: -0.3px;
-        }
-
-        .sb-logo-name span {
-          color: #1d4ed8;
         }
 
         .sb-nav {
@@ -96,21 +78,6 @@ const Header = () => {
         .sb-nav a:hover {
           color: #1d4ed8;
           background: #eff6ff;
-        }
-
-        .sb-cta {
-          background: #1d4ed8 !important;
-          color: #fff !important;
-          font-weight: 600 !important;
-          padding: 8px 18px !important;
-          border-radius: 6px !important;
-          margin-left: 8px;
-          transition: background 0.15s !important;
-        }
-
-        .sb-cta:hover {
-          background: #1e40af !important;
-          color: #fff !important;
         }
 
         .sb-hamburger {
@@ -195,10 +162,14 @@ const Header = () => {
 
           {/* Logo */}
           <Link href="/" className="sb-logo">
-            <div className="sb-logo-badge">SJ</div>
-            <div className="sb-logo-name">
-              Sports<span>Jira</span>
-            </div>
+            <Image
+              src="/android-chrome-512x512.png"
+              alt="SportsJira"
+              width={512}
+              height={512}
+              className="sb-logo-image"
+              priority
+            />
           </Link>
 
           {/* Desktop nav */}
@@ -208,9 +179,6 @@ const Header = () => {
                 {link.label}
               </Link>
             ))}
-            <Link href="/admin" className="sb-cta">
-              Admin
-            </Link>
           </nav>
 
           {/* Mobile hamburger */}
@@ -238,9 +206,6 @@ const Header = () => {
                 {link.label}
               </Link>
             ))}
-            <Link href="/admin" onClick={() => setMenuOpen(false)} style={{ color: "#1d4ed8", fontWeight: 600 }}>
-              Admin →
-            </Link>
           </div>
         )}
       </header>

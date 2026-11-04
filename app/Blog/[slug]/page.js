@@ -3,12 +3,15 @@
 import { getBlogBySlug, getBlogs } from "@/lib/api";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { serializeJsonLd, siteName, siteUrl } from "@/lib/site";
+import {
+  organizationId,
+  serializeJsonLd,
+  siteName,
+  siteUrl,
+  toIsoDate,
+  websiteId,
+} from "@/lib/site";
 import { sanitizeArticleHtml } from "@/lib/article-content";
-
-export async function generateStaticParams() {
-  return [];
-}
 
 export async function generateMetadata({ params }) {
   try {
@@ -25,9 +28,8 @@ export async function generateMetadata({ params }) {
     const canonicalUrl = `${siteUrl}/Blog/${encodeURIComponent(blog.slug || slug)}`;
     const description = blog.seoDescription || blog.excerpt || `Read ${blog.title} on ${siteName}.`;
     const title = blog.seoTitle || blog.title;
-    const image = blog.coverImage
-      ? [{ url: blog.coverImage, alt: blog.coverImageAlt || blog.title }]
-      : undefined;
+    const imageUrl = blog.coverImage || "/opengraph-image";
+    const image = [{ url: imageUrl, alt: blog.coverImageAlt || blog.title }];
 
     return {
       title,
@@ -38,6 +40,8 @@ export async function generateMetadata({ params }) {
       openGraph: {
         type: "article",
         url: canonicalUrl,
+        siteName,
+        locale: "en_IN",
         title,
         description,
         siteName,
@@ -49,15 +53,18 @@ export async function generateMetadata({ params }) {
         images: image,
       },
       twitter: {
-        card: blog.coverImage ? "summary_large_image" : "summary",
+        card: "summary_large_image",
         title,
         description,
-        images: blog.coverImage ? [blog.coverImage] : undefined,
+        images: [imageUrl],
       },
     };
   } catch (error) {
     console.error("Failed to generate article metadata:", error.message);
-    return { title: "Sports News & Analysis" };
+    return {
+      title: "Article not found",
+      robots: { index: false, follow: false },
+    };
   }
 }
 
@@ -121,9 +128,19 @@ export default async function BlogDetailPage({ params }) {
   if (!blog) notFound();
 
   const articleUrl = `${siteUrl}/Blog/${encodeURIComponent(blog.slug)}`;
+  const categorySlug = blog.categorySlug || String(blog.category || "").toLowerCase().trim().replace(/\s+/g, "-");
+  const subcategorySlug = blog.subcategorySlug || String(blog.subcategory || "").toLowerCase().trim().replace(/\s+/g, "-");
+  const categoryPath = categorySlug ? `/category/${encodeURIComponent(categorySlug)}` : null;
+  const subcategoryPath = categoryPath && subcategorySlug
+    ? `${categoryPath}/${encodeURIComponent(subcategorySlug)}`
+    : null;
+  const publishedDate = toIsoDate(blog.createdAt);
+  const modifiedDate = toIsoDate(blog.updatedAt || blog.createdAt);
   const articleStructuredData = {
     "@context": "https://schema.org",
-    "@type": "Article",
+    "@type": "BlogPosting",
+    "@id": `${articleUrl}#article`,
+    url: articleUrl,
     mainEntityOfPage: {
       "@type": "WebPage",
       "@id": articleUrl,
@@ -131,43 +148,47 @@ export default async function BlogDetailPage({ params }) {
     headline: blog.title,
     description: blog.excerpt || `Read ${blog.title} on ${siteName}.`,
     image: blog.coverImage ? [blog.coverImage] : undefined,
-    datePublished: blog.createdAt,
-    dateModified: blog.updatedAt || blog.createdAt,
-    author: {
-      "@type": "Person",
-      name: blog.author || siteName,
-    },
-    publisher: {
-      "@type": "Organization",
-      name: siteName,
-      url: siteUrl,
-      logo: {
-        "@type": "ImageObject",
-        url: `${siteUrl}/favicon.ico`,
-      },
-    },
-    articleSection: blog.category,
-    keywords: blog.tags?.length ? blog.tags : blog.category,
+    ...(publishedDate ? { datePublished: publishedDate } : {}),
+    ...(modifiedDate ? { dateModified: modifiedDate } : {}),
+    author: blog.author
+      ? { "@type": "Person", name: blog.author }
+      : { "@id": organizationId },
+    publisher: { "@id": organizationId },
+    isPartOf: { "@id": websiteId },
+    ...(blog.category ? { articleSection: blog.category } : {}),
+    keywords: [blog.category, blog.subcategory, ...(Array.isArray(blog.tags) ? blog.tags : [])].filter(Boolean),
     inLanguage: "en-IN",
   };
 
+  const breadcrumbItems = [
+    { "@type": "ListItem", position: 1, name: "Home", item: siteUrl },
+  ];
+  if (blog.category && categoryPath) {
+    breadcrumbItems.push({
+      "@type": "ListItem",
+      position: breadcrumbItems.length + 1,
+      name: blog.category,
+      item: `${siteUrl}${categoryPath}`,
+    });
+  }
+  if (blog.subcategory && subcategoryPath) {
+    breadcrumbItems.push({
+      "@type": "ListItem",
+      position: breadcrumbItems.length + 1,
+      name: blog.subcategory,
+      item: `${siteUrl}${subcategoryPath}`,
+    });
+  }
+  breadcrumbItems.push({
+    "@type": "ListItem",
+    position: breadcrumbItems.length + 1,
+    name: blog.title,
+    item: articleUrl,
+  });
   const breadcrumbStructuredData = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
-    itemListElement: [
-      {
-        "@type": "ListItem",
-        position: 1,
-        name: "Home",
-        item: siteUrl,
-      },
-      {
-        "@type": "ListItem",
-        position: 2,
-        name: blog.title,
-        item: articleUrl,
-      },
-    ],
+    itemListElement: breadcrumbItems,
   };
 
   try {
@@ -248,16 +269,20 @@ export default async function BlogDetailPage({ params }) {
           <article>
             <nav className="breadcrumb">
               <Link href="/">Home</Link>
-              <span className="breadcrumb-sep">›</span>
-              <Link href="/">Cricket News</Link>
-              <span className="breadcrumb-sep">›</span>
-              <Link href={`/category/${blog.categorySlug || encodeURIComponent(blog.category.toLowerCase().replace(/\s+/g, "-"))}`}>{blog.category}</Link>
+              {blog.category && categoryPath && (
+                <>
+                  <span className="breadcrumb-sep">›</span>
+                  <Link href={categoryPath}>{blog.category}</Link>
+                </>
+              )}
               {blog.subcategory && (
                 <>
                   <span className="breadcrumb-sep">›</span>
-                  <Link href={`/category/${blog.categorySlug}/${blog.subcategorySlug}`}>{blog.subcategory}</Link>
+                  <Link href={subcategoryPath || categoryPath}>{blog.subcategory}</Link>
                 </>
               )}
+              <span className="breadcrumb-sep">›</span>
+              <span aria-current="page">{blog.title}</span>
             </nav>
 
             <Link href="/" className="back-link">← Back to all articles</Link>

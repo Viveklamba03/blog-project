@@ -4,7 +4,7 @@ import { getBlogs, getCategories } from "@/lib/api";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import BlogPagination from "@/Components/BlogPagination";
-import { siteUrl } from "@/lib/site";
+import { serializeJsonLd, siteUrl, websiteId } from "@/lib/site";
 
 export async function generateMetadata({ searchParams }) {
   const params = await searchParams;
@@ -26,6 +26,21 @@ export async function generateMetadata({ searchParams }) {
     description,
     alternates: { canonical },
     openGraph: { type: "website", title, description, url: canonical },
+    openGraph: {
+      type: "website",
+      siteName: "SportsJira",
+      locale: "en_IN",
+      title,
+      description,
+      url: canonical,
+      images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "SportsJira sports news" }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: ["/opengraph-image"],
+    },
   };
 }
 
@@ -87,9 +102,48 @@ export default async function BlogPage({ searchParams }) {
 
   const featured = blogs[0] || null;
   const rest = blogs.slice(1);
+  const listingQuery = new URLSearchParams();
+  if (category) listingQuery.set("category", category);
+  if (page > 1) listingQuery.set("page", String(page));
+  const listingUrl = `${siteUrl}/${listingQuery.size ? `?${listingQuery}` : ""}`;
+  const listingStructuredData = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    "@id": `${listingUrl}#webpage`,
+    url: listingUrl,
+    name: category
+      ? `${category} Cricket News${page > 1 ? ` – Page ${page}` : ""}`
+      : `Latest Sports News & Match Analysis${page > 1 ? ` – Page ${page}` : ""}`,
+    description:
+      "Stay up to date with sports news, cricket coverage, match analysis, series previews and player insights from SportsJira.",
+    isPartOf: { "@id": websiteId },
+    mainEntity: {
+      "@type": "ItemList",
+      "@id": `${listingUrl}#articles`,
+      itemListOrder: "https://schema.org/ItemListOrderDescending",
+      numberOfItems: total,
+      itemListElement: blogs.map((blog, index) => {
+        const url = `${siteUrl}/Blog/${encodeURIComponent(blog.slug)}`;
+        return {
+          "@type": "ListItem",
+          position: (page - 1) * 15 + index + 1,
+          item: {
+            "@type": "BlogPosting",
+            "@id": `${url}#article`,
+            url,
+            name: blog.title,
+          },
+        };
+      }),
+    },
+  };
 
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(listingStructuredData) }}
+      />
       <style>{`
         .news-page { font-family: Georgia, serif; background: #fff; min-height: 100vh; }
 

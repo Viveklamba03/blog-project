@@ -3,7 +3,14 @@ import Header from "@/Components/Header";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import Link from "next/link";
-import { serializeJsonLd, siteName, siteUrl } from "@/lib/site";
+import {
+  organizationId,
+  serializeJsonLd,
+  siteLogoUrl,
+  siteName,
+  siteUrl,
+  websiteId,
+} from "@/lib/site";
 
 export const metadata = {
   metadataBase: new URL(siteUrl),
@@ -18,6 +25,14 @@ export const metadata = {
   creator: siteName,
   publisher: siteName,
   category: "sports",
+  icons: {
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
   keywords: [
     "sports news",
     "cricket news",
@@ -37,12 +52,14 @@ export const metadata = {
     title: "Sports News & Analysis | SportsJira",
     description:
       "The latest sports news, cricket coverage, match analysis and player insights.",
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "SportsJira sports news" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Sports News & Analysis | SportsJira",
     description:
       "The latest sports news, cricket coverage, match analysis and player insights.",
+    images: ["/opengraph-image"],
   },
   robots: {
     index: true,
@@ -58,33 +75,41 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }) {
-  const structuredData = [
-    {
-      "@context": "https://schema.org",
-      "@type": "Organization",
-      name: siteName,
-      url: siteUrl,
-      logo: `${siteUrl}/favicon.ico`,
-    },
-    {
-      "@context": "https://schema.org",
-      "@type": "WebSite",
-      name: siteName,
-      url: siteUrl,
-      inLanguage: "en-IN",
-    },
-  ];
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": organizationId,
+        name: siteName,
+        url: siteUrl,
+        logo: {
+          "@type": "ImageObject",
+          "@id": `${siteUrl}/#logo`,
+          url: siteLogoUrl,
+          contentUrl: siteLogoUrl,
+          width: 512,
+          height: 512,
+        },
+      },
+      {
+        "@type": "WebSite",
+        "@id": websiteId,
+        name: siteName,
+        url: siteUrl,
+        inLanguage: "en-IN",
+        publisher: { "@id": organizationId },
+      },
+    ],
+  };
 
   return (
     <html lang="en">
       <body className="bg-[#f7f5f0] text-gray-900">
-        {structuredData.map((data) => (
-          <script
-            key={data["@type"]}
-            type="application/ld+json"
-            dangerouslySetInnerHTML={{ __html: serializeJsonLd(data) }}
-          />
-        ))}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(structuredData) }}
+        />
 
         {/* Header */}
         <Header />
