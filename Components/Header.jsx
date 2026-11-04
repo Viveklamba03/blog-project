@@ -53,10 +53,20 @@ const Header = () => {
         }
 
         .sb-logo-image {
-          width: 56px;
-          height: 56px;
+          width: 44px;
+          height: 44px;
           object-fit: contain;
           flex-shrink: 0;
+        }
+
+        .sb-logo-name {
+          font-size: 20px;
+          font-weight: 700;
+          color: #111827;
+        }
+
+        .sb-logo-name span {
+          color: #1d4ed8;
         }
 
         .sb-nav {
@@ -163,13 +173,16 @@ const Header = () => {
           {/* Logo */}
           <Link href="/" className="sb-logo">
             <Image
-              src="/android-chrome-512x512.png"
-              alt="SportsJira"
-              width={512}
-              height={512}
+              src="/Sports%20Blog%20Brand%20Logo%20(4).png"
+              alt=""
+              width={2000}
+              height={2000}
               className="sb-logo-image"
               priority
             />
+            <span className="sb-logo-name">
+              Sports<span>Jira</span>
+            </span>
           </Link>
 
           {/* Desktop nav */}

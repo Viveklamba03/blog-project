@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   organizationId,
   serializeJsonLd,
+  siteLogoPath,
   siteLogoUrl,
   siteName,
   siteUrl,
@@ -27,11 +28,12 @@ export const metadata = {
   category: "sports",
   icons: {
     icon: [
+      { url: siteLogoPath, sizes: "2000x2000", type: "image/png" },
       { url: "/favicon.ico" },
       { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
       { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
     ],
-    apple: "/apple-touch-icon.png",
+    apple: siteLogoPath,
   },
   keywords: [
     "sports news",
@@ -88,8 +90,8 @@ export default function RootLayout({ children }) {
           "@id": `${siteUrl}/#logo`,
           url: siteLogoUrl,
           contentUrl: siteLogoUrl,
-          width: 512,
-          height: 512,
+          width: 2000,
+          height: 2000,
         },
       },
       {
