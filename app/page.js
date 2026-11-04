@@ -25,7 +25,6 @@ export async function generateMetadata({ searchParams }) {
     title,
     description,
     alternates: { canonical },
-    openGraph: { type: "website", title, description, url: canonical },
     openGraph: {
       type: "website",
       siteName: "SportsJira",

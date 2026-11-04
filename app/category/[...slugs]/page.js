@@ -59,7 +59,10 @@ export async function generateMetadata({ params, searchParams }) {
     };
   } catch (error) {
     console.error("Failed to generate category metadata:", error.message);
-    return { title: `${siteName} categories` };
+    return {
+      title: `${siteName} categories`,
+      robots: { index: false, follow: false },
+    };
   }
 }
 

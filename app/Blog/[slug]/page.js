@@ -30,11 +30,12 @@ export async function generateMetadata({ params }) {
     const title = blog.seoTitle || blog.title;
     const imageUrl = blog.coverImage || "/opengraph-image";
     const image = [{ url: imageUrl, alt: blog.coverImageAlt || blog.title }];
+    const tags = Array.isArray(blog.tags) ? blog.tags : [];
 
     return {
       title,
       description,
-      keywords: [blog.category, blog.subcategory, ...(blog.tags || [])].filter(Boolean),
+      keywords: [blog.category, blog.subcategory, ...tags].filter(Boolean),
       alternates: { canonical: canonicalUrl },
       robots: blog.noIndex ? { index: false, follow: true } : undefined,
       openGraph: {
@@ -44,12 +45,11 @@ export async function generateMetadata({ params }) {
         locale: "en_IN",
         title,
         description,
-        siteName,
         publishedTime: blog.createdAt,
         modifiedTime: blog.updatedAt || blog.createdAt,
         authors: blog.author ? [blog.author] : undefined,
         section: [blog.category, blog.subcategory].filter(Boolean).join(" / "),
-        tags: blog.tags,
+        tags,
         images: image,
       },
       twitter: {
