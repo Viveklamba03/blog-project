@@ -213,16 +213,24 @@ export default async function BlogDetailPage({ params }) {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Source+Serif+4:wght@400;600&display=swap');
         .article-page { font-family: 'Source Serif 4', Georgia, serif; background: #f7f5f0; min-height: 100vh; }
-        .article-hero { width: 100%; max-height: 420px; object-fit: cover; display: block; }
+        .article-hero-frame {
+          width: 100%;
+          max-width: 900px;
+          aspect-ratio: 16 / 9;
+          background: #e5e7eb;
+        }
+        .article-hero { width: 100%; height: 100%; object-fit: cover; display: block; }
         .article-hero-placeholder {
-          width: 100%; height: 280px;
+          width: 100%; height: 100%;
+          aspect-ratio: 16 / 9;
           background: linear-gradient(135deg, #14532d 0%, #166534 100%);
           display: flex; align-items: center; justify-content: center; font-size: 72px;
         }
         .article-wrap {
-          max-width: 1100px; margin: 0 auto; padding: 32px 20px;
+          max-width: 1280px; margin: 0 auto; padding: 32px 20px;
           display: grid; grid-template-columns: 1fr 280px; gap: 48px;
         }
+        article > :not(.article-hero-frame) { max-width: 760px; }
         @media (max-width: 860px) { .article-wrap { grid-template-columns: 1fr; } .article-sidebar { display: none; } }
         .breadcrumb { font-size: 12px; color: #9ca3af; display: flex; gap: 6px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
         .breadcrumb a { color: #6b7280; text-decoration: none; }
@@ -259,14 +267,16 @@ export default async function BlogDetailPage({ params }) {
       `}</style>
 
       <div className="article-page">
-        {blog.coverImage ? (
-          <img src={blog.coverImage} alt={blog.coverImageAlt || blog.title} className="article-hero" />
-        ) : (
-          <div className="article-hero-placeholder">🏏</div>
-        )}
-
         <div className="article-wrap">
           <article>
+            <div className="article-hero-frame">
+              {blog.coverImage ? (
+                <img src={blog.coverImage} alt={blog.coverImageAlt || blog.title} className="article-hero" />
+              ) : (
+                <div className="article-hero-placeholder">🏏</div>
+              )}
+            </div>
+
             <nav className="breadcrumb">
               <Link href="/">Home</Link>
               {blog.category && categoryPath && (

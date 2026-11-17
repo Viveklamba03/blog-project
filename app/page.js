@@ -186,7 +186,18 @@ export default async function BlogPage({ searchParams }) {
           display: block;
         }
 
-        .hero-img { width: 100%; height: 300px; object-fit: cover; }
+        .hero-img {
+          display: block;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .hero-img-frame {
+          width: 100%;
+          aspect-ratio: 16 / 9;
+          background: #f3f4f6;
+        }
 
         .hero-body { padding: 20px; }
 
@@ -205,9 +216,14 @@ export default async function BlogPage({ searchParams }) {
         }
 
         .feed-thumb {
+          display: block;
           width: 120px;
-          height: 80px;
+          height: 67.5px;
+          aspect-ratio: 16 / 9;
           object-fit: cover;
+          background: #f3f4f6;
+          flex-shrink: 0;
+          align-self: flex-start;
         }
 
         .feed-title {
@@ -250,7 +266,11 @@ export default async function BlogPage({ searchParams }) {
                   <>
                     <p className="section-head">Top Story</p>
                     <Link href={`/Blog/${featured.slug}`} className="hero-card">
-                      {featured.coverImage && <img src={featured.coverImage} alt={featured.coverImageAlt || featured.title} className="hero-img" />}
+                      {featured.coverImage && (
+                        <div className="hero-img-frame">
+                          <img src={featured.coverImage} alt={featured.coverImageAlt || featured.title} className="hero-img" />
+                        </div>
+                      )}
                       <div className="hero-body">
                         <div className="hero-title">{featured.title}</div>
                         <p>{featured.excerpt}</p>

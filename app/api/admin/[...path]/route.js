@@ -92,12 +92,21 @@ async function proxyAdminRequest(request, path) {
     body = await request.text();
   }
 
-  const upstream = await fetch(target, {
-    method: request.method,
-    headers,
-    body,
-    cache: "no-store",
-  });
+  let upstream;
+  try {
+    upstream = await fetch(target, {
+      method: request.method,
+      headers,
+      body,
+      cache: "no-store",
+    });
+  } catch (error) {
+    console.error("Admin backend request failed:", error);
+    return jsonError(
+      "Unable to reach the backend API. Check NEXT_PUBLIC_API_URL and confirm the backend is running.",
+      502,
+    );
+  }
   if (upstream.ok && ["POST", "PUT", "DELETE"].includes(request.method)) {
     revalidateTag("blogs", "max");
     revalidateTag("categories", "max");

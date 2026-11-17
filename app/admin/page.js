@@ -69,6 +69,7 @@ export default function AdminPage() {
   const [blogTotalPages, setBlogTotalPages] = useState(1);
   const [categories, setCategories] = useState([]);
   const [form, setForm] = useState(emptyBlog);
+  const [imagePreviewError, setImagePreviewError] = useState(false);
   const [editorResetKey, setEditorResetKey] = useState(0);
   const [categoryForm, setCategoryForm] = useState(emptyCategory);
   const [editingId, setEditingId] = useState(null);
@@ -124,6 +125,7 @@ export default function AdminPage() {
 
   function resetBlogForm() {
     setForm(emptyBlog);
+    setImagePreviewError(false);
     setEditingId(null);
     setEditorResetKey((key) => key + 1);
   }
@@ -179,6 +181,7 @@ export default function AdminPage() {
           getParentId(item) === category?._id &&
           (item.slug === fullBlog.subcategorySlug || item.name === fullBlog.subcategory)
       );
+      setImagePreviewError(false);
       setForm({
         ...emptyBlog,
         title: fullBlog.title || "",
@@ -301,6 +304,7 @@ export default function AdminPage() {
 
   function updateBlogField(event) {
     const { name, value, type, checked } = event.target;
+    if (name === "coverImage") setImagePreviewError(false);
     setForm((current) => ({
       ...current,
       [name]: type === "checkbox" ? checked : value,
@@ -479,9 +483,33 @@ export default function AdminPage() {
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block text-sm font-medium text-slate-700">Cover image URL <span className="font-normal text-slate-500">(optional)</span>
-                <input type="url" name="coverImage" value={form.coverImage} onChange={updateBlogField} className={fieldClass} />
-              </label>
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Cover image URL <span className="font-normal text-slate-500">(optional)</span>
+                  <input type="url" name="coverImage" value={form.coverImage} onChange={updateBlogField} className={fieldClass} />
+                </label>
+                <div className="relative mt-2 aspect-video overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                  {form.coverImage ? (
+                    imagePreviewError ? (
+                      <div className="absolute inset-0 flex items-center justify-center px-4 text-center text-sm text-slate-600">
+                        Could not load this image. Check the URL.
+                      </div>
+                    ) : (
+                      <img
+                        key={form.coverImage}
+                        src={form.coverImage}
+                        alt={form.coverImageAlt || form.title || "Cover image preview"}
+                        onError={() => setImagePreviewError(true)}
+                        className="absolute inset-0 h-full w-full object-cover"
+                      />
+                    )
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center px-4 text-center text-sm text-slate-500">
+                      Enter an image URL to preview the cover.
+                    </div>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-slate-500">Preview shows the same 16:9 crop used on the homepage and article page.</p>
+              </div>
               <label className="block text-sm font-medium text-slate-700">Image alt text
                 <input maxLength={250} name="coverImageAlt" value={form.coverImageAlt} onChange={updateBlogField} className={fieldClass} />
               </label>
